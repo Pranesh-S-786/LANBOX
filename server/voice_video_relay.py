@@ -26,7 +26,8 @@ class VoiceVideoRelay:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 * 1024 * 1024)
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 8 * 1024 * 1024)
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 8 * 1024 * 1024)
         except Exception:
             pass
 
@@ -35,7 +36,7 @@ class VoiceVideoRelay:
             self.is_running = True
             self.thread = threading.Thread(target=self._relay_loop, daemon=True)
             self.thread.start()
-            print(f"[+] UDP Media Relay (Voice/Video/Screen) active on port {self.port}")
+            print(f"[+] UDP Media Relay (Voice/Video/Screen/Chunks) active on port {self.port}")
         except Exception as e:
             print(f"[!] Media Relay failed to bind to UDP port {self.port}: {e}")
 
@@ -47,7 +48,7 @@ class VoiceVideoRelay:
                     continue
 
                 # Header Format:
-                # [1 byte packet_type] (0x01=REGISTER_UDP, 0x02=AUDIO, 0x03=VIDEO, 0x04=SCREEN)
+                # [1 byte packet_type] (0x01=REGISTER_UDP, 0x02=AUDIO, 0x03=VIDEO, 0x04=SCREEN, 0x05=CHUNKED_SCREEN)
                 # [1 byte target_len]
                 # [target_username bytes]
                 # [1 byte sender_len]

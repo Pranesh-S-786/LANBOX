@@ -134,7 +134,8 @@ class LANBoxClient:
         """Binds a local UDP socket and registers with server media relay."""
         self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 * 1024 * 1024)
+            self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 8 * 1024 * 1024)
+            self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 8 * 1024 * 1024)
         except Exception:
             pass
 
@@ -261,9 +262,13 @@ class LANBoxClient:
                     if self.video_call:
                         self.video_call.process_incoming_video_frame(payload)
 
-                elif pkt_type == 0x04:  # Screen Share
+                elif pkt_type == 0x04:  # Legacy Screen Share
                     if self.screen_share:
                         self.screen_share.process_incoming_screen_frame(payload)
+
+                elif pkt_type == 0x05:  # Chunked Ultra-HD Screen Share
+                    if self.screen_share:
+                        self.screen_share.process_incoming_chunk(payload)
 
             except Exception:
                 if not self.is_connected:

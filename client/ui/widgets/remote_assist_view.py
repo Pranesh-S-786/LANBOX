@@ -1,39 +1,58 @@
-"""
-Permission-Based Remote Assistance View Widget for LANBOX.
-Renders interactive remote desktop screen, relays mouse and keyboard events,
-and provides instant session termination controls.
-"""
+import time
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QComboBox, QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QPoint
-from PyQt6.QtGui import QFont, QImage, QPixmap, QMouseEvent, QKeyEvent
+from PyQt6.QtGui import QFont, QImage, QPixmap, QMouseEvent, QKeyEvent, QWheelEvent
 import cv2
 
 class RemoteDisplayCanvas(QLabel):
-    """Custom QLabel that intercepts mouse and keyboard events and forwards them to controller."""
+    """Custom QLabel that intercepts mouse and keyboard events with precise coordinate mapping and throttled transmission."""
     input_event_generated = pyqtSignal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._last_move_time = 0
+        self._last_rx = -1.0
+        self._last_ry = -1.0
+        self._rendered_rect = None  # (offset_x, offset_y, draw_w, draw_h)
+
+    def set_rendered_rect(self, ox: int, oy: int, dw: int, dh: int):
+        self._rendered_rect = (ox, oy, dw, dh)
+
+    def _normalize_coords(self, pos) -> tuple[float, float]:
+        if not self.pixmap() or self.pixmap().isNull():
+            return None, None
+
+        if self._rendered_rect:
+            ox, oy, dw, dh = self._rendered_rect
+            if dw > 0 and dh > 0:
+                rx = (pos.x() - ox) / dw
+                ry = (pos.y() - oy) / dh
+                return max(0.0, min(1.0, rx)), max(0.0, min(1.0, ry))
+
+        return max(0.0, min(1.0, pos.x() / max(1, self.width()))), max(0.0, min(1.0, pos.y() / max(1, self.height())))
 
     def mouseMoveEvent(self, ev: QMouseEvent):
-        if self.pixmap() and not self.pixmap().isNull():
-            rx = ev.position().x() / self.width()
-            ry = ev.position().y() / self.height()
-            self.input_event_generated.emit({
-                "type": "mouse_move",
-                "rx": rx,
-                "ry": ry
-            })
+        now = time.time()
+        if now - self._last_move_time >= 0.025:  # ~40 Hz update rate to eliminate network backlog
+            rx, ry = self._normalize_coords(ev.position())
+            if rx is not None and (abs(rx - self._last_rx) > 0.001 or abs(ry - self._last_ry) > 0.001):
+                self._last_move_time = now
+                self._last_rx = rx
+                self._last_ry = ry
+                self.input_event_generated.emit({
+                    "type": "mouse_move",
+                    "rx": rx,
+                    "ry": ry
+                })
         super().mouseMoveEvent(ev)
 
     def mousePressEvent(self, ev: QMouseEvent):
-        if self.pixmap() and not self.pixmap().isNull():
-            rx = ev.position().x() / self.width()
-            ry = ev.position().y() / self.height()
+        rx, ry = self._normalize_coords(ev.position())
+        if rx is not None:
             btn = "left" if ev.button() == Qt.MouseButton.LeftButton else "right"
             self.input_event_generated.emit({
                 "type": "mouse_click",
@@ -44,15 +63,32 @@ class RemoteDisplayCanvas(QLabel):
         super().mousePressEvent(ev)
 
     def mouseDoubleClickEvent(self, ev: QMouseEvent):
-        if self.pixmap() and not self.pixmap().isNull():
-            rx = ev.position().x() / self.width()
-            ry = ev.position().y() / self.height()
+        rx, ry = self._normalize_coords(ev.position())
+        if rx is not None:
             self.input_event_generated.emit({
                 "type": "mouse_double_click",
                 "rx": rx,
                 "ry": ry
             })
         super().mouseDoubleClickEvent(ev)
+
+    def wheelEvent(self, ev: QWheelEvent):
+        delta = ev.angleDelta().y() // 120
+        if delta != 0:
+            self.input_event_generated.emit({
+                "type": "mouse_scroll",
+                "delta": delta * 50
+            })
+        super().wheelEvent(ev)
+
+    def keyPressEvent(self, ev: QKeyEvent):
+        key_text = ev.text()
+        if key_text:
+            self.input_event_generated.emit({
+                "type": "key_write",
+                "text": key_text
+            })
+        super().keyPressEvent(ev)
 
 class RemoteAssistViewWidget(QWidget):
     remote_frame_signal = pyqtSignal(object)
@@ -167,6 +203,13 @@ class RemoteAssistViewWidget(QWidget):
         pix = QPixmap.fromImage(q_img).scaled(
             self.display_canvas.size(),
             Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation
+            Qt.TransformationMode.FastTransformation
         )
+        cw = self.display_canvas.width()
+        ch = self.display_canvas.height()
+        pw = pix.width()
+        ph = pix.height()
+        ox = (cw - pw) // 2
+        oy = (ch - ph) // 2
+        self.display_canvas.set_rendered_rect(ox, oy, pw, ph)
         self.display_canvas.setPixmap(pix)

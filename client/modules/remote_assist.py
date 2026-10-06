@@ -12,6 +12,9 @@ from common.config import TYPE_REMOTE_INPUT_EVENT, TYPE_REMOTE_STOP
 try:
     import pyautogui
     pyautogui.FAILSAFE = True  # Moving mouse to upper-left corner aborts control
+    pyautogui.PAUSE = 0.0      # CRITICAL: Disable 0.1s default sleep to make remote control instantaneous
+    pyautogui.MINIMUM_DURATION = 0.0
+    pyautogui.MINIMUM_SLEEP = 0.0
     HAS_PYAUTOGUI = True
 except Exception:
     HAS_PYAUTOGUI = False
@@ -27,8 +30,8 @@ class RemoteAssistanceClient:
         """Called when local user agrees to give remote assistance to controller_user."""
         self.is_hosting = True
         self.current_partner = controller_user
-        # Start streaming desktop to controller
-        self.client.screen_share.start_sharing(self.client.current_user, controller_user, self.client.udp_sock)
+        # Start streaming desktop to controller with crisp 1080p preset
+        self.client.screen_share.start_sharing(self.client.current_user, controller_user, self.client.udp_sock, quality_preset="1080p")
         print(f"[+] Remote assistance session started. {controller_user} is controlling.")
 
     def handle_incoming_input_event(self, event_data: dict):
@@ -41,20 +44,25 @@ class RemoteAssistanceClient:
             screen_w, screen_h = pyautogui.size()
 
             if evt_type == "mouse_move":
-                rx = event_data.get("rx", 0.0)
-                ry = event_data.get("ry", 0.0)
+                rx = max(0.0, min(1.0, event_data.get("rx", 0.0)))
+                ry = max(0.0, min(1.0, event_data.get("ry", 0.0)))
                 pyautogui.moveTo(int(rx * screen_w), int(ry * screen_h), _pause=False)
 
             elif evt_type == "mouse_click":
-                rx = event_data.get("rx", 0.0)
-                ry = event_data.get("ry", 0.0)
+                rx = max(0.0, min(1.0, event_data.get("rx", 0.0)))
+                ry = max(0.0, min(1.0, event_data.get("ry", 0.0)))
                 btn = event_data.get("btn", "left")
                 pyautogui.click(int(rx * screen_w), int(ry * screen_h), button=btn, _pause=False)
 
             elif evt_type == "mouse_double_click":
-                rx = event_data.get("rx", 0.0)
-                ry = event_data.get("ry", 0.0)
+                rx = max(0.0, min(1.0, event_data.get("rx", 0.0)))
+                ry = max(0.0, min(1.0, event_data.get("ry", 0.0)))
                 pyautogui.doubleClick(int(rx * screen_w), int(ry * screen_h), _pause=False)
+
+            elif evt_type == "mouse_scroll":
+                delta = event_data.get("delta", 0)
+                if delta:
+                    pyautogui.scroll(delta, _pause=False)
 
             elif evt_type == "key_press":
                 key = event_data.get("key")
