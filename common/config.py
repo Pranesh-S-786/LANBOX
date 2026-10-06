@@ -74,14 +74,28 @@ TYPE_ERROR = 'ERROR'
 
 def get_local_lan_ip() -> str:
     """
-    Returns the primary outbound LAN IPv4 address of this machine.
+    Returns the primary IPv4 LAN address of this machine.
+    Works 100% offline without requiring active internet connectivity.
     """
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # 1. Query OS routing table using dummy UDP socket probe
+    for probe_target in [('10.255.255.255', 1), ('192.168.1.1', 80), ('8.8.8.8', 80)]:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(probe_target)
+            ip = s.getsockname()[0]
+            s.close()
+            if ip and not ip.startswith('127.'):
+                return ip
+        except Exception:
+            pass
+
+    # 2. Fallback: Hostname address resolution
     try:
-        s.connect(('8.8.8.8', 80))
-        ip = s.getsockname()[0]
+        hostname = socket.gethostname()
+        for ip in socket.gethostbyname_ex(hostname)[2]:
+            if not ip.startswith('127.') and ':' not in ip:
+                return ip
     except Exception:
-        ip = '127.0.0.1'
-    finally:
-        s.close()
-    return ip
+        pass
+
+    return '127.0.0.1'
