@@ -1,0 +1,43 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.zip
+*.tar.gz
+*.egg-info/
+.eggs/
+
+# Database and uploaded files
+*.db
+*.sqlite3
+lanbox.db
+server_storage/
+
+# PyInstaller build logs / caches
+*.manifest
+*.spec
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
