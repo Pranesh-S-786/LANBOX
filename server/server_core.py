@@ -69,20 +69,27 @@ class LANBoxServer:
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(25)
+        self.server_socket.settimeout(0.5)  # Enables non-blocking responsiveness for Ctrl+C on Windows
         self.is_running = True
 
         print(f"[+] LANBOX Central Hub listening on {self.host}:{self.port}")
 
         try:
             while self.is_running:
-                client_sock, client_addr = self.server_socket.accept()
+                try:
+                    client_sock, client_addr = self.server_socket.accept()
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+
                 thread = threading.Thread(
                     target=self._client_handler,
                     args=(client_sock, client_addr),
                     daemon=True
                 )
                 thread.start()
-        except OSError:
+        except KeyboardInterrupt:
             pass
         finally:
             self.stop()

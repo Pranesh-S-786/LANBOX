@@ -1,10 +1,7 @@
-"""
-Main Server Launcher for LANBOX.
-Runs the central TCP server on the local machine and displays LAN IP information.
-"""
 import sys
 import os
 import argparse
+import signal
 
 # Ensure project root is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -36,12 +33,25 @@ def main():
     print("[*] Press Ctrl+C at any time to shut down the server.\n")
 
     server = LANBoxServer(host=args.host, port=args.port, db_path=args.db)
-    try:
-        server.start()
-    except KeyboardInterrupt:
-        print("\n[!] Shutting down server...")
+
+    def handle_sigint(sig, frame):
+        print("\n[!] Ctrl+C received. Shutting down server gracefully...")
         server.stop()
         sys.exit(0)
 
+    signal.signal(signal.SIGINT, handle_sigint)
+    try:
+        signal.signal(signal.SIGTERM, handle_sigint)
+    except Exception:
+        pass
+
+    try:
+        server.start()
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        server.stop()
+
 if __name__ == "__main__":
     main()
+
